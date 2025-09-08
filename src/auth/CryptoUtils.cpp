@@ -5,7 +5,7 @@
 #include <cryptopp/filters.h>
 #include <cryptopp/files.h>
 
-std::string cryptoUtils::genHash(const std::string& input)
+std::string CryptoUtils::genHash(const std::string& input)
 {
     std::string destination{};
     CryptoPP::SHA256 hash;
@@ -23,7 +23,7 @@ std::string cryptoUtils::genHash(const std::string& input)
     return destination;
 }
 
-std::vector<std::string> cryptoUtils::genHashChain(const std::string& seed, int len)
+std::vector<std::string> CryptoUtils::genHashChain(const std::string& seed, int len)
 {
     std::vector<std::string> chain;
     std::string input{seed};
@@ -32,7 +32,7 @@ std::vector<std::string> cryptoUtils::genHashChain(const std::string& seed, int 
     for(int i = 0; i < len; ++i)
     {
         //each hash is hex encoded
-        chain.push_back(cryptoUtils::genHash(input));
+        chain.push_back(CryptoUtils::genHash(input));
         input = chain.back();
     }
 

@@ -9,7 +9,7 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 
 # Find Qt first
-find_package(Qt5 REQUIRED COMPONENTS Widgets Network)
+find_package(Qt5 REQUIRED COMPONENTS Widgets Network Core)
 
 add_executable(lamport-auth
     src/main.cpp
@@ -18,6 +18,7 @@ add_executable(lamport-auth
     src/network/Client.cpp
     src/network/Server.cpp
     src/gui/MainWindow.cpp
+    src/util/ConfigManager.cpp
 )
 
 # Headers in include/
@@ -28,6 +29,7 @@ target_link_libraries(lamport-auth PRIVATE
     cryptopp
     Qt5::Widgets
     Qt5::Network
+    Qt5::Core
 )
 
 # Optional: binary in build/bin/

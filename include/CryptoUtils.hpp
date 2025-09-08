@@ -4,7 +4,7 @@
 #include <string>
 #include <vector>
 
-namespace cryptoUtils{
+namespace CryptoUtils{
 
         //Generate Hash using SHA256 from the given input and returns the hex-encoded result
         std::string genHash(const std::string& input);

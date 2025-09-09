@@ -10,6 +10,10 @@ namespace CryptoUtils{
         std::string genHash(const std::string& input);
         //Generates Hash chain and returns a vector of string
         std::vector<std::string> genHashChain(const std::string& seed, int len);
+
+        std::string generateRandomSeed(int size);
+
+        std::string convertToHex(const std::string& input);
 }
 
 #endif

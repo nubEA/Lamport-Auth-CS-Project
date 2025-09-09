@@ -4,6 +4,7 @@
 #include <cryptopp/hex.h>
 #include <cryptopp/filters.h>
 #include <cryptopp/files.h>
+#include <cryptopp/osrng.h>   // for AutoSeededRandomPool
 
 std::string CryptoUtils::genHash(const std::string& input)
 {
@@ -37,4 +38,28 @@ std::vector<std::string> CryptoUtils::genHashChain(const std::string& seed, int 
     }
 
     return chain;
+}
+
+std::string CryptoUtils::generateRandomSeed(int size)
+{
+    CryptoPP::AutoSeededRandomPool rng;
+
+    std::string seed;
+    seed.resize(size);
+    rng.GenerateBlock(reinterpret_cast<CryptoPP::byte*>(&seed[0]),size);
+
+    return convertToHex(seed);
+}
+
+std::string CryptoUtils::convertToHex(const std::string& input)
+{
+    std::string hexOutput;
+    
+    CryptoPP::StringSource ss(input, true, 
+        new CryptoPP::HexEncoder(
+            new CryptoPP::StringSink(hexOutput)
+            )
+        );
+    
+        return hexOutput;
 }

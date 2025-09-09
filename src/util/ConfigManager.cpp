@@ -1,4 +1,5 @@
 #include "ConfigManager.hpp"
+#include <iostream>
 
 ConfigManager::ConfigManager(const QString& filePath) {
     loadConfig(filePath);
@@ -7,7 +8,7 @@ ConfigManager::ConfigManager(const QString& filePath) {
 void ConfigManager::loadConfig(const QString& filePath) {
     QFile configFile(filePath);
     if (!configFile.open(QIODevice::ReadOnly)) {
-        qWarning() << "JSON file could not be opened:" << filePath;
+        std::cerr << "ConfigManager: JSON file could not be opened: " << filePath.toStdString() << std::endl;
         return;
     }
 
@@ -18,13 +19,13 @@ void ConfigManager::loadConfig(const QString& filePath) {
     QJsonDocument doc = QJsonDocument::fromJson(data, &parseError);
 
     if (parseError.error != QJsonParseError::NoError) {
-        qWarning() << "Parse error at" << parseError.offset << ":"
-                   << parseError.errorString();
+        std::cerr << "ConfigManager: Parse error at " << parseError.offset << ": "
+                   << parseError.errorString().toStdString() << std::endl;
         return;
     }
 
     if (!doc.isObject()) {
-        qWarning() << "Config file does not contain a valid JSON object";
+        std::cerr << "ConfigManager: Config file does not contain a valid JSON object" << std::endl;
         return;
     }
 
@@ -52,5 +53,5 @@ int ConfigManager::getSleepTime() const {
 }
 
 int ConfigManager::getNumberOfIterations() const {
-    return configObj.value("numRounds").toInt();
+    return configObj.value("numberOfIterations").toInt();
 }

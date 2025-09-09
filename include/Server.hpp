@@ -1,39 +1,53 @@
 #ifndef SERVER_HPP
 #define SERVER_HPP
 
-#include "ConfigManager.hpp"
-#include "LamportAuth.hpp"
 #include <QTcpServer>
-#include <QObject>
 #include <QTcpSocket>
 #include <QTimer>
-#include <QDataStream>
-#include <QByteArray>
+#include "ConfigManager.hpp"
+#include "LamportAuth.hpp"
 
 class Server : public QTcpServer
 {
     Q_OBJECT
 
 public:
-    explicit Server(const QString& filePath);
+    // ✅ MODIFIED: Added QObject *parent parameter
+    explicit Server(const QString& filePath, QObject *parent = nullptr);
     ~Server();
 
-    void startServer();
+    // Public methods for UI control
     void stopServer();
-    void sendChallenge();
-    QByteArray IntToArray(qint32 source);
+    void startAuthentication();
+    void stopAuthentication();
 
-public slots:
+    // Public methods for UI state checking
+    bool isListening() const;
+    bool hasActiveClient() const;
+    bool isAuthRunning() const;
+
+private slots:
     void handleNewConnection();
+    void sendChallenge();
     void receiveResponse();
+    void onClientDisconnected();
+
+signals:
+    void clientConnected();
     void clientDisconnected();
+    void newLogMessage(const QString &message);
+    void authProcessStarted();
+    void authProcessStopped();
 
 private:
-    QTcpSocket* clientSocket{};
-    LamportAuth auth{};
-    ConfigManager config;
-    int currentIteration{1};
-    QTimer* challengeTimer{};
+    void startServer();
+    QByteArray IntToArray(qint32 source);
+
+    QTcpSocket* m_clientSocket = nullptr;
+    ConfigManager m_config;
+    LamportAuth m_auth;
+    QTimer* m_challengeTimer = nullptr;
+    int m_currentIteration = 1;
 };
 
 #endif // SERVER_HPP

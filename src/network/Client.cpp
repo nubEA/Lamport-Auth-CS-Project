@@ -1,57 +1,64 @@
 #include "Client.hpp"
-#include <iostream>
+#include <QDataStream>
 
 Client::Client(const QString& filePath, QObject* parent)
-    : QObject(parent), config(filePath)
+    : QObject(parent), m_config(filePath)
 {
-    socket = new QTcpSocket(this);
-
-    connect(socket, &QTcpSocket::connected, this, &Client::onConnected);
-    connect(socket, &QTcpSocket::disconnected, this, &Client::onDisconnected);
-    connect(socket, &QTcpSocket::readyRead, this, &Client::onReadyRead);
-
+    m_socket = new QTcpSocket(this);
+    connect(m_socket, &QTcpSocket::connected, this, &Client::onConnected);
+    connect(m_socket, &QTcpSocket::disconnected, this, &Client::onDisconnected);
+    connect(m_socket, &QTcpSocket::readyRead, this, &Client::onReadyRead);
     startClient();
 }
 
 Client::~Client() {
-    stopClient();  // graceful cleanup
+    stopClient();
+}
+
+bool Client::isConnected() const {
+    return m_socket && m_socket->state() == QAbstractSocket::ConnectedState;
 }
 
 void Client::startClient() {
-    QHostAddress aliceIP(config.getAliceIP());
-    quint16 alicePort = config.getAlicePort();
-
-    std::cout << "Client: Connecting to Alice at " << aliceIP.toString().toStdString() << ":" << alicePort << std::endl;
-    socket->connectToHost(aliceIP, alicePort);
+    QHostAddress aliceIP(m_config.getAliceIP());
+    quint16 alicePort = m_config.getAlicePort();
+    emit newLogMessage("Client: Connecting to " + aliceIP.toString() + ":" + QString::number(alicePort));
+    m_socket->connectToHost(aliceIP, alicePort);
 }
 
 void Client::stopClient() {
-    if (socket && socket->state() == QAbstractSocket::ConnectedState) {
-        socket->disconnectFromHost();
-        socket->waitForDisconnected(1000);
+    if (isConnected()) {
+        m_socket->disconnectFromHost();
     }
 }
 
-QByteArray Client::IntToArray(qint32 source)
-{
-    QByteArray temp;
-    QDataStream data(&temp, QIODevice::ReadWrite);
-    data << source;
-    return temp;
+void Client::onConnected() {
+    emit connected();
+    emit newLogMessage("Client: Connection successful.");
+    int len = m_config.getNumberOfIterations();
+    std::string seed = CryptoUtils::generateRandomSeed(32);
+    m_auth.initChain(seed, len);
+    emit newLogMessage("Client: Seed (hex): " + QString::fromStdString(CryptoUtils::convertToHex(seed)));
+    emit newLogMessage("Client: Sending final hash h_n to server...");
+    std::string hn = m_auth.getLastHash();
+    m_socket->write(QByteArray::fromStdString(hn));
+    m_socket->flush();
 }
 
-void Client::onConnected() {
-    int len = config.getNumberOfIterations();
+void Client::onDisconnected() {
+    emit newLogMessage("Client: Disconnected from server.");
+    emit disconnected();
+}
 
-    std::string seed = CryptoUtils::generateRandomSeed(32);
-    auth.initChain(seed, len);
-
-    std::cout << "Client: Seed (hex): " << CryptoUtils::convertToHex(seed) << std::endl;
-
-    std::string hn = auth.getLastHash();
-    QByteArray content = QByteArray::fromStdString(hn);
-    socket->write(content);
-    socket->flush();
+void Client::onReadyRead() {
+    QByteArray content = m_socket->readAll();
+    int challengeNumber = getNumberFromQByteArray(content);
+    if (challengeNumber <= 0) return;
+    emit newLogMessage("Client: Received challenge #" + QString::number(challengeNumber));
+    std::string response = m_auth.getOTPForChallenge(challengeNumber);
+    emit newLogMessage("Client: Sending response h_" + QString::number(m_config.getNumberOfIterations() - challengeNumber));
+    m_socket->write(QByteArray::fromStdString(response));
+    m_socket->flush();
 }
 
 int Client::getNumberFromQByteArray(const QByteArray& input) {
@@ -61,22 +68,9 @@ int Client::getNumberFromQByteArray(const QByteArray& input) {
     return number;
 }
 
-void Client::onReadyRead() {
-    QByteArray content = socket->readAll();
-
-    int challengeNumber = getNumberFromQByteArray(content);
-    if (challengeNumber < 0) return;
-
-    std::cout << "Client: Received challenge #" << challengeNumber << std::endl;
-
-    std::string challengeResponse = auth.getOTPForChallenge(challengeNumber);
-    QByteArray challengeResponseArray = QByteArray::fromStdString(challengeResponse);
-
-    socket->write(challengeResponseArray);
-    socket->flush();
-}
-
-void Client::onDisconnected() {
-    std::cout << "Client: Disconnected from Alice." << std::endl;
-    emit disconnected();
+QByteArray Client::IntToArray(qint32 source) {
+    QByteArray temp;
+    QDataStream data(&temp, QIODevice::ReadWrite);
+    data << source;
+    return temp;
 }

@@ -1,7 +1,8 @@
 #include "Server.hpp"
-#include <iostream>
+#include <QDataStream>
 
-Server::Server(const QString& filePath): config(filePath)
+Server::Server(const QString& filePath, QObject *parent)
+    : QTcpServer(parent), m_config(filePath)
 {
     startServer();
 }
@@ -10,137 +11,136 @@ Server::~Server(){
     stopServer();
 }
 
-void Server::stopServer() {
-    if (challengeTimer) {
-        challengeTimer->stop();
-        challengeTimer->deleteLater();
-        challengeTimer = nullptr;
-    }
-
-    if (clientSocket) {
-        if (clientSocket->state() == QAbstractSocket::ConnectedState) {
-            clientSocket->disconnectFromHost();
-            clientSocket->waitForDisconnected(1000);
-        }
-        clientSocket->deleteLater();
-        clientSocket = nullptr;
-    }
-
-    if (this->isListening()) {
-        this->close();
-        std::cout << "Server: Server stopped." << std::endl;
-    }
-
-    currentIteration = 1;
+bool Server::isListening() const {
+    return QTcpServer::isListening();
 }
 
+bool Server::hasActiveClient() const {
+    return m_clientSocket != nullptr && m_clientSocket->state() == QAbstractSocket::ConnectedState;
+}
+
+bool Server::isAuthRunning() const {
+    return m_challengeTimer != nullptr && m_challengeTimer->isActive();
+}
 
 void Server::startServer()
 {
-    quint16 serverPort = config.getAlicePort();
-    QHostAddress serverIP(config.getAliceIP());
-    if(!this->listen(serverIP, serverPort))
-    {
-        std::cerr << "Server: Error occurred while creating the socket" << std::endl;
+    quint16 serverPort = m_config.getAlicePort();
+    QHostAddress serverIP(m_config.getAliceIP());
+    if(!this->listen(serverIP, serverPort)) {
+        emit newLogMessage("Server: Error - Could not start listening on port " + QString::number(serverPort));
         return;
     }
-    else{
-        std::cout << "Server: Started, listening on port: " << serverPort << std::endl;
-        connect(this, &QTcpServer::newConnection, this, &Server::handleNewConnection);
+    emit newLogMessage("Server: Started, listening on port " + QString::number(serverPort));
+    connect(this, &QTcpServer::newConnection, this, &Server::handleNewConnection);
+}
+
+void Server::stopServer() {
+    stopAuthentication();
+    if (m_clientSocket) {
+        m_clientSocket->disconnectFromHost();
+        m_clientSocket->deleteLater();
+        m_clientSocket = nullptr;
+    }
+    if (this->isListening()) {
+        this->close();
+        emit newLogMessage("Server: Listener stopped.");
     }
 }
 
-QByteArray Server::IntToArray(qint32 source)
+void Server::startAuthentication() {
+    if (!hasActiveClient()) {
+        emit newLogMessage("Server: Cannot start, no client connected.");
+        return;
+    }
+    if (m_auth.getLastVerifiedHash().empty()){
+        emit newLogMessage("Server: Cannot start, initial hash (h_n) not yet received.");
+        return;
+    }
+    if (isAuthRunning()) {
+        emit newLogMessage("Server: Authentication process is already running.");
+        return;
+    }
+
+    emit newLogMessage("Server: Starting authentication process...");
+    m_challengeTimer = new QTimer(this);
+    connect(m_challengeTimer, &QTimer::timeout, this, &Server::sendChallenge);
+    m_challengeTimer->start(m_config.getSleepTime() * 1000);
+    emit authProcessStarted();
+}
+
+void Server::stopAuthentication() {
+    if (isAuthRunning()) {
+        m_challengeTimer->stop();
+        m_challengeTimer->deleteLater();
+        m_challengeTimer = nullptr;
+        m_currentIteration = 1;
+        emit newLogMessage("Server: Authentication process stopped by user.");
+        emit authProcessStopped();
+    }
+}
+
+void Server::handleNewConnection()
 {
+    if (hasActiveClient()) {
+        this->nextPendingConnection()->disconnectFromHost();
+        return;
+    }
+    m_clientSocket = this->nextPendingConnection();
+    if(m_clientSocket) {
+        connect(m_clientSocket, &QTcpSocket::readyRead, this, &Server::receiveResponse);
+        connect(m_clientSocket, &QTcpSocket::disconnected, this, &Server::onClientDisconnected);
+        emit newLogMessage("Server: New connection from: " + m_clientSocket->peerAddress().toString());
+        emit clientConnected();
+    }
+}
+
+void Server::sendChallenge()
+{
+    if(hasActiveClient()) {
+        if(m_currentIteration < m_config.getNumberOfIterations()) {
+            emit newLogMessage("Server: Sent challenge #" + QString::number(m_currentIteration));
+            m_clientSocket->write(IntToArray(m_currentIteration));
+            m_clientSocket->flush();
+            m_currentIteration++;
+        } else {
+            emit newLogMessage("Server: All challenges sent. Authentication complete.");
+            stopAuthentication();
+        }
+    }
+}
+
+void Server::onClientDisconnected() {
+    emit newLogMessage("Server: Client has disconnected.");
+    stopAuthentication();
+    if (m_clientSocket) {
+        m_clientSocket->deleteLater();
+        m_clientSocket = nullptr;
+    }
+    emit clientDisconnected();
+}
+
+void Server::receiveResponse(){
+    if(!hasActiveClient()) return;
+    QByteArray content = m_clientSocket->readAll();
+    std::string latestHash = content.toStdString();
+
+    if(m_auth.getLastVerifiedHash().empty()){
+        m_auth.setLastHash(latestHash);
+        emit newLogMessage("Server: Received initial hash (h_n). Ready to start authentication.");
+    } else {
+        bool ok = m_auth.verifyOTP(latestHash);
+        emit newLogMessage("Server: Verification Result: " + QString(ok ? "Success" : "Failure"));
+        if(!ok) {
+            emit newLogMessage("Server: Verification failed. Terminating connection.");
+            m_clientSocket->disconnectFromHost();
+        }
+    }
+}
+
+QByteArray Server::IntToArray(qint32 source) {
     QByteArray temp;
     QDataStream data(&temp, QIODevice::ReadWrite);
     data << source;
     return temp;
-}
-
-
-void Server::handleNewConnection()
-{
-    clientSocket = this->nextPendingConnection();
-    if(clientSocket)
-    {
-        connect(clientSocket, &QTcpSocket::readyRead, this, &Server::receiveResponse);
-        connect(clientSocket, &QTcpSocket::disconnected, this, &Server::clientDisconnected);
-        std::cout << "Server: New Connection from: " << clientSocket->peerAddress().toString().toStdString() << std::endl;
-
-        challengeTimer = new QTimer(this);
-        connect(challengeTimer, &QTimer::timeout, this, &Server::sendChallenge);
-        challengeTimer->start(config.getSleepTime()*1000);
-    }
-}
-
-
-void Server::sendChallenge()
-{
-    if(clientSocket && clientSocket->state() == QAbstractSocket::ConnectedState) {
-
-        if(auth.getLastVerifiedHash().empty()) return;
-
-        if(currentIteration < config.getNumberOfIterations()) {
-            std::cout << "Server: Sent challenge #" << currentIteration << std::endl;
-            clientSocket->write(IntToArray(currentIteration));
-            clientSocket->flush();
-            currentIteration++;
-        } else {
-            challengeTimer->stop();
-            currentIteration = 1;
-        }
-    }
-}
-
-
-void Server::clientDisconnected() {
-    if (clientSocket) {
-        std::cout << "Server: Client disconnected: "
-                 << clientSocket->peerAddress().toString().toStdString()
-                 << ":" << clientSocket->peerPort() << std::endl;
-        clientSocket->deleteLater();
-        clientSocket = nullptr;
-    }
-
-    if (challengeTimer) {
-        challengeTimer->stop();
-        challengeTimer->deleteLater();
-        challengeTimer = nullptr;
-    }
-
-    currentIteration = 1;
-}
-
-void Server::receiveResponse(){
-
-    QByteArray content = clientSocket->readAll();
-    std::string latestHash = content.toStdString();
-
-    if(auth.getLastVerifiedHash().empty()){
-        auth.setLastHash(latestHash);
-        std::cout << "Server: Received initial hash (h_n)." << std::endl;
-    }
-    else{
-        bool ok = auth.verifyOTP(latestHash);
-        std::cout << "Server: Verification Result: " << (ok ? "Success" : "Failure") << std::endl;
-        if(!ok)
-        {
-            std::cerr << "Server: Verification failed. Closing connection." << std::endl;
-
-            if (challengeTimer) {
-                challengeTimer->stop();
-                challengeTimer->deleteLater();
-                challengeTimer = nullptr;
-            }
-
-            if (clientSocket) {
-                 clientSocket->disconnectFromHost();
-                 clientSocket->deleteLater();
-                 clientSocket = nullptr;
-            }
-
-            this->close();
-        }
-    }
 }

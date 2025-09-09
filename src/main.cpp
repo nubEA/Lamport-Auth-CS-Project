@@ -1,22 +1,17 @@
-#include <QCoreApplication>
-#include "ConfigManager.hpp"
+#include "MainWindow.hpp"
+#include <QApplication>
 
-int main(int argc, char *argv[]) {
-    qDebug() << "Starting test...";
+int main(int argc, char *argv[])
+{
+    // QApplication is used for GUI applications
+    QApplication a(argc, argv);
 
+    // Create an instance of your main window
+    MainWindow w;
 
-    QCoreApplication app(argc, argv);
+    // Show the window on the screen
+    w.show();
 
-    QString configPath = "/home/harshit/code/lamport-auth-qt/config.json";
-
-    ConfigManager config(configPath);
-
-    qDebug() << "Alice IP:" << config.getAliceIP();
-    qDebug() << "Alice Port:" << config.getAlicePort();
-    qDebug() << "Bob IP:" << config.getBobIP();
-    qDebug() << "Bob Port:" << config.getBobPort();
-    qDebug() << "Sleep Duration:" << config.getSleepTime();
-    qDebug() << "Number of Rounds:" << config.getNumberOfIterations();
-
-    return 0;
+    // Start the application's event loop
+    return a.exec();
 }

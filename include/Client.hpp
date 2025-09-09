@@ -1,15 +1,12 @@
 #ifndef CLIENT_HPP
 #define CLIENT_HPP
 
-#include "ConfigManager.hpp"
-#include "CryptoUtils.hpp"
-#include "LamportAuth.hpp"
 #include <QObject>
 #include <QTcpSocket>
 #include <QHostAddress>
-#include <QDataStream>
-#include <QByteArray>
-#include <string>
+#include "ConfigManager.hpp"
+#include "LamportAuth.hpp"
+#include "CryptoUtils.hpp"
 
 class Client : public QObject
 {
@@ -18,24 +15,27 @@ class Client : public QObject
 public:
     explicit Client(const QString& filePath, QObject* parent = nullptr);
     ~Client();
-
-    void startClient();
     void stopClient();
-    QByteArray IntToArray(qint32 source);
-    int getNumberFromQByteArray(const QByteArray& input);
-    
-signals:
-    void disconnected();
+    bool isConnected() const;
 
 private slots:
     void onConnected();
-    void onReadyRead();
     void onDisconnected();
+    void onReadyRead();
+
+signals:
+    void connected();
+    void disconnected();
+    void newLogMessage(const QString &message);
 
 private:
-    QTcpSocket* socket{};
-    LamportAuth auth;
-    ConfigManager config;
+    void startClient();
+    QByteArray IntToArray(qint32 source);
+    int getNumberFromQByteArray(const QByteArray& input);
+
+    QTcpSocket* m_socket;
+    ConfigManager m_config;
+    LamportAuth m_auth;
 };
 
 #endif // CLIENT_HPP

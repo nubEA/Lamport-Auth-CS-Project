@@ -155,7 +155,7 @@ sudo dnf install -y gcc-c++ cmake make qt5-qtbase-devel cryptopp-devel qt5-qtway
     You need to run two instances of the application.
 
       * Open two separate terminals in the `build` directory.
-      * Run `./LamportAuth` in each terminal.
+      * Run `./lamport-auth-gui` in each terminal.
       * In the first window, select the **Server** role and click **Connect**.
       * In the second window, select the **Client** role and click **Connect**.
       * Once connected, use the **Start** button in the server window to begin the authentication process.

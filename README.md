@@ -124,7 +124,11 @@ To build and run this project, you need the following dependencies installed:
   * **CMake** (version 3.16 or later).
   * **Qt5 Framework** (Core, GUI, Widgets, Network modules).
   * **Crypto++ Library** (`libcryptopp-dev` on Debian/Ubuntu).
-
+    
+For Fedora: 
+```bash
+sudo dnf install -y gcc-c++ cmake make qt5-qtbase-devel cryptopp-devel qt5-qtwayland
+```
 -----
 
 ## Building and Running

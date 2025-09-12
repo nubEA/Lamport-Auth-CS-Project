@@ -165,6 +165,7 @@ sudo dnf install -y gcc-c++ cmake make qt5-qtbase-devel cryptopp-devel qt5-qtway
 ## Configuration
 
 The application's behavior is controlled by a `config.json` file located in the same directory as the executable.
+Change the config file path in the `MainWindow.cpp`.
 
 #### Example `config.json`:
 
